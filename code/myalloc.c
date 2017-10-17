@@ -9,58 +9,71 @@
 #include <string.h>
 #include "myalloc.h"
 
-typedef struct header_block {
-  size_t size;
-  unsigned is_free;
-  struct header_block *next;
-  //struct header_block *prev;
-} header;
+#define min_size 16			//must be large enough to store the list pointers in
 
-header *head, *tail;
-size_t footer;
+typedef struct block_info {
+  struct block_info *next;
+  struct block_info *prev;
+} block_info;
+
+typedef struct tag {
+	size_t size;
+} tag;
+
+block_info *head;
 
 void *myalloc(int size){
 	if (!size) return NULL;
-	header *new_block;
-	size_t header_size = sizeof(header);
-	//printf("header size: %zu\n", header_size);
+
+	if (size < min_size) {
+		size = min_size;
+	}
+
 	if (head) {
-		header *curr = head;
+		block_info *curr = head;
+		//printf("block info: %p\n", curr);
 		while (curr) {
-			if (curr->is_free && curr->size >= size) {
-				new_block = curr;
-				new_block->is_free = 0;
-				return (void*) (new_block + 1);
+			tag *bloc_size = (char*)curr - sizeof(size_t);
+			//printf("tag: %p\n", bloc_size);
+			if (bloc_size->size >= size) {
+				return (void*) (curr);
 			}
 			curr = curr->next;
 		}
 	}
-	void* block = mmap(NULL, (header_size + size), PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+
+	tag *head_tag;
+	tag *foot_tag;
+
+	size_t actual_size = sizeof(size_t) + size + sizeof(size_t);
+
+	void* block = mmap(NULL, (actual_size), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (block == (void *) -1) {
 		printf("%s\n", strerror(errno));
 		return NULL;
 	}
-	new_block = block;
-	new_block->size = size;
-	new_block->is_free = 0;
-	new_block->next = NULL;
-	if (!head) {
-		head = new_block;
-	}
-	if (tail) {
-		tail->next = new_block;
-		tail = new_block;
-	}
-	return (void*) (new_block + 1);
+	head_tag = block;
+	foot_tag = (char*) block + (actual_size - sizeof(size_t));
+	void* block_start = (char*) head_tag + sizeof(size_t);
+
+	head_tag->size = size;
+	foot_tag->size = size;
+
+	return block_start;
 }
 
 void myfree(void *ptr){
-	header *free_header = (header*) ptr - 1;
-	free_header->is_free = 1;
-	if (free_header->next) {
-		if (free_header->next->is_free == 1) {
-			free_header->size = free_header->size + sizeof(header) + free_header->next->size;
-			free_header->next = free_header->next->next;
-		}
+	block_info *temp;
+	temp = ptr;
+	if (!head) {
+		temp->next = NULL;
+		temp->prev = NULL;
+		head = temp;
+	} else {
+		temp->next = head;
+		temp->prev = NULL;
+		head->prev = temp;
+		head = temp;
 	}
+	//printf("%p\n", head);
 }
