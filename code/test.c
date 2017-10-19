@@ -21,6 +21,11 @@
 
 /* This program allocates integer arrays and displays trace information*/
 
+
+/*	Stuart Norcross - 12/03/10 */
+
+/* This program allocates integer arrays and displays trace information*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -60,7 +65,6 @@ int main(int argc, char* argv[]){
 
 	int *allocated[NUMBER_OF_ALLOCATIONS];
 	int i;
-	printf("%s starting\n",argv[0]);
 
 	// do some allocation
 	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
