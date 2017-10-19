@@ -35,8 +35,8 @@ void *myalloc(int size){
   tag *foot_tag;
 	block_info *head_info;
 
-	if (size < (word_size * 2)) {
-		size = (word_size * 2);
+	if (size < (tag_size)) {
+		size = (tag_size);
 	}
 
   if (!init) {
@@ -55,7 +55,7 @@ void *myalloc(int size){
 
     if (start_tag->size - actual_size >= min_size) {
       head_tag = (char*)block + actual_size;
-      head_tag->size = start_tag->size - actual_size;
+      head_tag->size = start_tag->size - (actual_size + tag_size * 2);
       head_tag->free = 1;
       head_info = (char*)head_tag + tag_size;
       head_info->next = NULL;
@@ -66,6 +66,7 @@ void *myalloc(int size){
       start_foot->size = size;
       start_foot->free = 0;
     }
+    //printf("Initialised %p\n", );
     return block_start;
   }
 
@@ -74,12 +75,12 @@ void *myalloc(int size){
 		start_tag = (char*)curr - tag_size;
     start_foot = (char*)curr + start_tag->size;
 		if (start_tag->size >= size) {
-			if ((start_tag->size - (size + tag_size)) >= min_size) {
+			if ((start_tag->size - (size + tag_size * 2)) >= min_size) {
 				head_tag = (char*)curr + (size + tag_size);
         foot_tag = start_foot;
-				head_tag->size = start_tag->size - size;
+				head_tag->size = start_tag->size - (size + tag_size * 2);
 				head_tag->free = 1;
-        foot_tag->size = start_tag->size - size;
+        foot_tag->size = head_tag->size;
         foot_tag->free = 1;
 				head_info = (char*)head_tag + tag_size;
 				start_tag->size = size;
