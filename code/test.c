@@ -57,13 +57,6 @@ int *alloc_and_set(int value){
 }
 
 int main(int argc, char* argv[]){
-  // long one = 0x109dd2010;
-  // long two = 0x109de4a20;
-  // long three = two - one;
-  // printf("%lu\n", three);
-  // return 0;
-
-
 
 	int *allocated[NUMBER_OF_ALLOCATIONS];
 	int i;
