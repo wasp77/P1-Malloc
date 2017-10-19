@@ -10,7 +10,8 @@
 #include "myalloc.h"
 
 #define word_size 8
-#define min_size 32			//must be large enough to store the list pointers in
+#define tag_size 16
+#define min_size 48			//must be large enough to store the list pointers in
 #define page_size 4096
 
 typedef struct block_info {
@@ -29,7 +30,9 @@ unsigned int init = 0;
 void *myalloc(int size){
 	if (!size) return NULL;
 	tag *start_tag;
+  tag *start_foot;
 	tag *head_tag;
+  tag *foot_tag;
 	block_info *head_info;
 
 	if (size < (word_size * 2)) {
@@ -38,45 +41,52 @@ void *myalloc(int size){
 
   if (!init) {
     init = 1;
-    size_t actual_size = (word_size * 2) + size;
-    void* block = mmap(NULL, page_size * 100, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    size_t actual_size = (tag_size * 2) + size;
+    void* block = mmap(NULL, page_size * 5000, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     if (block == (void *) -1) {
       printf("%s\n", strerror(errno));
       return NULL;
     }
 
     start_tag = block;
-    void* block_start = (char*) start_tag + (word_size * 2);
-    start_tag->size = (page_size * 100) - (word_size * 2);
+    void* block_start = (char*) start_tag + (tag_size);
+    start_tag->size = (page_size * 5000) - (tag_size);
     start_tag->free = 0;
 
-    if (actual_size < start_tag->size) {
-      if (start_tag->size - actual_size >= min_size) {
-        head_tag = (char*)block + actual_size;
-        head_tag->size = start_tag->size - actual_size;
-        head_tag->free = 1;
-        head_info = (char*)head_tag + (word_size * 2);
-        head_info->next = NULL;
-        head_info->prev = NULL;
-        head = head_info;
-        start_tag->size = size;
-      }
-      return block_start;
-    } else {
-      return NULL;
+    if (start_tag->size - actual_size >= min_size) {
+      head_tag = (char*)block + actual_size;
+      head_tag->size = start_tag->size - actual_size;
+      head_tag->free = 1;
+      head_info = (char*)head_tag + tag_size;
+      head_info->next = NULL;
+      head_info->prev = NULL;
+      head = head_info;
+      start_tag->size = size;
+      start_foot = (char*)head_tag - tag_size;
+      start_foot->size = size;
+      start_foot->free = 0;
     }
+    return block_start;
   }
 
 	block_info *curr = head;
 	while (curr) {
-		start_tag = (char*)curr - (word_size * 2);
+		start_tag = (char*)curr - tag_size;
+    start_foot = (char*)curr + start_tag->size;
 		if (start_tag->size >= size) {
-			if ((start_tag->size - size) >= min_size) {
-				head_tag = (char*)curr + size;
+			if ((start_tag->size - (size + tag_size)) >= min_size) {
+				head_tag = (char*)curr + (size + tag_size);
+        foot_tag = start_foot;
 				head_tag->size = start_tag->size - size;
 				head_tag->free = 1;
-				head_info = (char*)head_tag + (word_size * 2);
+        foot_tag->size = start_tag->size - size;
+        foot_tag->free = 1;
+				head_info = (char*)head_tag + tag_size;
 				start_tag->size = size;
+        start_tag->free = 0;
+        start_foot = (char*)head_tag - tag_size;
+        start_foot->size = size;
+        start_foot->free = 0;
 				if (curr->next) {
 					head_info->next = curr->next;
 					curr->next->prev = head_info;
@@ -104,7 +114,6 @@ void *myalloc(int size){
           return NULL;
         }
       }
-      //printf("%p\n", curr);
 			return (void*) (curr);
 		}
 		curr = curr->next;
@@ -114,16 +123,50 @@ void *myalloc(int size){
 }
 
 void myfree(void *ptr){
-	block_info *temp;
-	temp = ptr;
-	if (!head) {
-		temp->next = NULL;
-		temp->prev = NULL;
-		head = temp;
-	} else {
-		temp->next = head;
-		temp->prev = NULL;
-		head->prev = temp;
-		head = temp;
-	}
+	block_info *current_info;
+  block_info *prev_info;
+  block_info *next_info;
+  tag *current_head;
+  tag *current_foot;
+  tag *next_tag;
+  tag *prev_tag;
+  size_t total_size;
+  current_head = (char*)ptr - tag_size;
+  current_foot = (char*)current_head + tag_size + current_head->size;
+  current_info = ptr;
+  prev_tag = (char*)current_head - tag_size;                             //Get the foot tag of the previous block
+  prev_info = (char*)prev_tag - prev_tag->size;
+  next_tag = (char*)current_foot + tag_size;                             //Get the head tag of the next block
+  next_info = (char*)next_tag + tag_size;
+
+  if (prev_tag->free && next_tag->free) {
+    total_size = current_head->size + prev_tag->size + next_tag->size + (tag_size * 4);
+    current_info = (char*)ptr - ((tag_size * 2) + prev_tag->size);
+  } else if (prev_tag->free && !next_tag->free) {
+    total_size = current_head->size + prev_tag->size + (tag_size * 2);
+    prev_info->prev->next = current_info->next;
+    current_info->next->prev = prev_info->prev;
+    current_info = (char*)ptr - ((tag_size * 2) + prev_tag->size);
+    current_info->next = head;
+    current_info->prev = NULL;
+    head->prev = current_info;
+    head = current_info;
+  } else if (!prev_tag->free && next_tag->free) {
+    total_size = current_head->size + next_tag->size + (tag_size * 2);
+    current_info->prev->next = next_info->next;
+    next_info->next->prev = current_info->prev;
+    current_info->next = head;
+    current_info->prev = NULL;
+    head->prev = current_info;
+    head = current_info;
+  } else {
+    current_info = ptr;
+    current_info->next = head;
+    current_info->prev = NULL;
+    head->prev = current_info;
+    head = current_info;
+  }
+
+
+
 }

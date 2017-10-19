@@ -21,18 +21,18 @@
 
 /* This program allocates integer arrays and displays trace information*/
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "myalloc.h"
 
-#define NUMBER_OF_ALLOCATIONS 100
-#define INTS_PER_ALLOCATION 1000
+#define INTS_PER_ALLOCATION 4000000
 
 int alloc_size=sizeof(int)*INTS_PER_ALLOCATION;
 
 void check_failed(int val){
-	fprintf(stderr, "Check failed for region with value %i\n",val);
+	fprintf(stderr, "Check failed for region with value %i.",val);
 	exit(-1);
 }
 
@@ -57,48 +57,14 @@ int *alloc_and_set(int value){
 }
 
 int main(int argc, char* argv[]){
-  // long one = 0x109dd2010;
-  // long two = 0x109de4a20;
-  // long three = two - one;
-  // printf("%lu\n", three);
-  // return 0;
-
-
-
-	int *allocated[NUMBER_OF_ALLOCATIONS];
-	int i;
 	printf("%s starting\n",argv[0]);
 
-	// do some allocation
-	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
-		allocated[i]=alloc_and_set(i);
-	}
+	// allocate
+	printf("TRYING TO ALLOCATE %i BYTES\n",alloc_size);
+	void *p1 = alloc_and_set(1);
+	check(p1,1);
 
-	// check the allocations.
-	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
-		check(allocated[i],i);
-	}
-	sleep(1);
-
-	// free the first, 10th and 20th allocations.
-	myfree(allocated[0]);
-	myfree(allocated[9]);
-	myfree(allocated[19]);
-
-	// more allocations
-	allocated[0]=alloc_and_set(9999999);
-	allocated[9]=alloc_and_set(9999998);
-	allocated[19]=alloc_and_set(9999997);
-
-		//check the latest allocations
-	check(allocated[0],9999999);
-	check(allocated[9],9999998);
-	check(allocated[19],9999997);
-
-	// check the rest of the allocations
-	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
-		if(i!=0&&i!=9&&i!=19)	check(allocated[i],i);
-	}
+	printf("TEST 1 PASSED - ALLOCATED %i BYTES\n",alloc_size);
 
 	printf("%s complete\n",argv[0]);
 
