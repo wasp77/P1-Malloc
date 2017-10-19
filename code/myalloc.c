@@ -23,6 +23,8 @@ typedef struct tag {
 } tag;
 
 block_info *head;
+void* mem_start;
+void* mem_end;
 unsigned int init = 0;
 
 void *myalloc(int size){
@@ -46,6 +48,8 @@ void *myalloc(int size){
       return NULL;
     }
 
+    mem_start = block;
+    mem_end = (char*)block + page_size * 5000;
     start_tag = block;
     void* block_start = (char*) start_tag + (tag_size);
     start_tag->size = (page_size * 5000) - (tag_size * 2);
@@ -130,40 +134,129 @@ void myfree(void *ptr){
   tag *next_tag;
   tag *prev_tag;
   size_t total_size;
-  current_head = (char*)ptr - tag_size;
-  current_foot = (char*)current_head + tag_size + current_head->size;
-  current_info = ptr;
-  prev_tag = (char*)current_head - tag_size;                             //Get the foot tag of the previous block
-  prev_info = (char*)prev_tag - prev_tag->size;
-  next_tag = (char*)current_foot + tag_size;                             //Get the head tag of the next block
-  next_info = (char*)next_tag + tag_size;
 
-  if (prev_tag->free && next_tag->free) {
-    total_size = current_head->size + prev_tag->size + next_tag->size + (tag_size * 4);
-    current_info = (char*)ptr - ((tag_size * 2) + prev_tag->size);
-  } else if (prev_tag->free && !next_tag->free) {
-    total_size = current_head->size + prev_tag->size + (tag_size * 2);
-    prev_info->prev->next = current_info->next;
-    current_info->next->prev = prev_info->prev;
-    current_info = (char*)ptr - ((tag_size * 2) + prev_tag->size);
-    current_info->next = head;
-    current_info->prev = NULL;
-    head->prev = current_info;
-    head = current_info;
-  } else if (!prev_tag->free && next_tag->free) {
-    total_size = current_head->size + next_tag->size + (tag_size * 2);
-    current_info->prev->next = next_info->next;
-    next_info->next->prev = current_info->prev;
-    current_info->next = head;
-    current_info->prev = NULL;
-    head->prev = current_info;
-    head = current_info;
-  } else {
-    current_info = ptr;
-    current_info->next = head;
-    current_info->prev = NULL;
-    head->prev = current_info;
-    head = current_info;
+  //Get the three structs for the current block
+  current_head = (char*)ptr - tag_size;
+  current_foot = (char*)ptr + current_head->size;
+  current_info = ptr;
+
+  //Check if the current block is at the start or end of memory
+  if (current_head == mem_start) {
+    printf("head of memory\n");
+    next_tag = (char*)current_foot + tag_size;
+    next_info = (char*)next_tag + tag_size;
+
+    if (next_tag->free) {
+      total_size = current_head->size + next_tag->size + (tag_size * 2);
+      if (next_info->next && next_info->prev) {
+        next_info->next->prev = next_info->prev;
+        next_info->prev->next = next_info->next;
+      } else if (next_info->next && !next_info->prev) {
+        next_info->next->prev = NULL;
+        head = next_info->next;
+      } else if (!next_info->next && next_info->prev) {
+        next_info->prev->next = NULL;
+      }
+      current_head->size = total_size;
+      current_foot = (char*)next_info + next_tag->size;
+      current_foot->size = total_size;
   }
+
+
+  } else if (((char*)current_foot + tag_size) == mem_end) {
+    printf("end of memory\n");
+    prev_tag = (char*)current_head - tag_size;
+    prev_info = (char*)prev_tag - prev_tag->size;
+
+    if (prev_tag->free) {
+      total_size = current_head->size + prev_tag->size + (tag_size * 2);
+      if (prev_info->next && prev_info->prev) {
+        prev_info->next->prev = prev_info->prev;
+        prev_info->prev->next = prev_info->next;
+      } else if (prev_info->next && !prev_info->prev) {
+        prev_info->next->prev = NULL;
+        head = prev_info->next;
+      } else if (!prev_info->next && prev_info->prev) {
+        prev_info->prev->next = NULL;
+      }
+      current_head = (char*)prev_info - tag_size;
+      current_head->size = total_size;
+      current_foot->size = total_size;
+      current_info = prev_info;
+    }
+
+
+  } else {
+    printf("not end of beginning\n");
+    next_tag = (char*)current_foot + tag_size;
+    next_info = (char*)next_tag + tag_size;
+    prev_tag = (char*)current_head - tag_size;
+    prev_info = (char*)prev_tag - prev_tag->size;
+
+
+    if (prev_tag->free && next_tag->free) {
+      total_size = current_head->size + prev_tag->size + next_tag->size + (tag_size * 4);
+      if (prev_info->next && prev_info->prev) {
+        prev_info->next->prev = prev_info->prev;
+        prev_info->prev->next = prev_info->next;
+      } else if (prev_info->next && !prev_info->prev) {
+        prev_info->next->prev = NULL;
+        head = prev_info->next;
+      } else if (!prev_info->next && prev_info->prev) {
+        prev_info->prev->next = NULL;
+      }
+
+      if (next_info->next && next_info->prev) {
+        next_info->next->prev = next_info->prev;
+        next_info->prev->next = next_info->next;
+      } else if (next_info->next && !next_info->prev) {
+        next_info->next->prev = NULL;
+        head = next_info->next;
+      } else if (!next_info->next && next_info->prev) {
+        next_info->prev->next = NULL;
+      }
+
+      current_head = (char*)prev_info - tag_size;
+      current_head->size = total_size;
+      current_foot->size = total_size;
+      current_info = (char*)prev_info;
+    } else if (prev_tag->free && !next_tag->free) {
+      total_size = current_head->size + prev_tag->size + (tag_size * 2);
+      if (prev_info->next && prev_info->prev) {
+        prev_info->next->prev = prev_info->prev;
+        prev_info->prev->next = prev_info->next;
+      } else if (prev_info->next && !prev_info->prev) {
+        prev_info->next->prev = NULL;
+        head = prev_info->next;
+      } else if (!prev_info->next && prev_info->prev) {
+        prev_info->prev->next = NULL;
+      }
+
+      current_head = (char*)prev_info - tag_size;
+      current_head->size = total_size;
+      current_foot->size = total_size;
+      current_info = (char*)prev_info;
+    } else if (!prev_tag->free && next_tag->free) {
+      total_size = current_head->size + next_tag->size + (tag_size * 2);
+      if (next_info->next && next_info->prev) {
+        next_info->next->prev = next_info->prev;
+        next_info->prev->next = next_info->next;
+      } else if (next_info->next && !next_info->prev) {
+        next_info->next->prev = NULL;
+        head = next_info->next;
+      } else if (!next_info->next && next_info->prev) {
+        next_info->prev->next = NULL;
+      }
+      current_head->size = total_size;
+      current_foot = (char*)next_info + next_tag->size;
+      current_foot->size = total_size;
+    }
+  }
+  current_head->free = 1;
+  current_foot->free = 1;
+  current_info->next = head;
+  current_info->prev = NULL;
+  head->prev = current_info;
+  head = current_info;
 
 }

@@ -1,27 +1,3 @@
-// #include "myalloc.h"
-// #include <stdio.h>
-//
-// // A simple test program to show the  use of the library
-// // By default, myalloc() simply calls malloc() so this will
-// // work.
-// // Kasim Terzic, Sep 2017
-//
-// void main()
-// {
-//     printf("Allocating 1024 * sizeof(int)... \n");
-//     int* ptr = myalloc(1024*sizeof(int));
-//     ptr[0] = 42;
-//
-//     printf("Freeing the allocated memory... \n");
-//     myfree(ptr);
-//
-//     printf("Yay!\n");
-// }
-/*	Stuart Norcross - 12/03/10 */
-
-/* This program allocates integer arrays and displays trace information*/
-
-
 /*	Stuart Norcross - 12/03/10 */
 
 /* This program allocates integer arrays and displays trace information*/
@@ -31,13 +7,12 @@
 #include <unistd.h>
 #include "myalloc.h"
 
-#define NUMBER_OF_ALLOCATIONS 100
-#define INTS_PER_ALLOCATION 1000
+#define INTS_PER_ALLOCATION 10
 
 int alloc_size=sizeof(int)*INTS_PER_ALLOCATION;
 
 void check_failed(int val){
-	fprintf(stderr, "Check failed for region with value %i\n",val);
+	fprintf(stderr, "Check failed for region with value %i.",val);
 	exit(-1);
 }
 
@@ -62,40 +37,42 @@ int *alloc_and_set(int value){
 }
 
 int main(int argc, char* argv[]){
+	printf("%s starting\n",argv[0]);
 
-	int *allocated[NUMBER_OF_ALLOCATIONS];
-	int i;
+	// allocate
+	void *p0 = alloc_and_set(-1);printf("TEST 2-0 PASSED - ALLOCATED (WILL NOT BE FREED)\n");
+	check(p0,-1);
 
-	// do some allocation
-	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
-		allocated[i]=alloc_and_set(i);
-	}
+	// allocate
+	void *p1 = alloc_and_set(1);printf("TEST 2-1 PASSED - ALLOCATED\n");
+	check(p1,1);
 
-	// check the allocations.
-	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
-		check(allocated[i],i);
-	}
-	sleep(1);
+  printf("Moving to Freeing\n");
+	//free
+	myfree(p1);
+	printf("TEST 2-2 PASSED - FREED\n");
 
-	// free the first, 10th and 20th allocations.
-	myfree(allocated[0]);
-	myfree(allocated[9]);
-	myfree(allocated[19]);
+	//allocate
+	void *p2 = alloc_and_set(2);
+	check(p2,2);
 
-	// more allocations
-	allocated[0]=alloc_and_set(9999999);
-	allocated[9]=alloc_and_set(9999998);
-	allocated[19]=alloc_and_set(9999997);
+	//p1 and p2 should be the same
+	if(p1==p2)printf("TEST 2-3 PASSED - P1 EQUALS P2\n");
+	else printf("TEST 2-3 FAILED - P1 NOT EQUAL TO P2\n");
 
-		//check the latest allocations
-	check(allocated[0],9999999);
-	check(allocated[9],9999998);
-	check(allocated[19],9999997);
+	myfree(p2);
 
-	// check the rest of the allocations
-	for(i=0;i<NUMBER_OF_ALLOCATIONS;i++){
-		if(i!=0&&i!=9&&i!=19)	check(allocated[i],i);
-	}
+	void *p3 = alloc_and_set(3);
+	check(p3,3);
+	printf("TEST 2-4 PASSED - ALLOCATED\n");
+	void *p4 = alloc_and_set(4);
+	check(p4,4);
+	printf("TEST 2-5 PASSED - ALLOCATED\n");
+
+	myfree(p3);
+	printf("TEST 2-6 PASSED - FREED\n");
+	myfree(p4);
+	printf("TEST 2-7 PASSED - FREED\n");
 
 	printf("%s complete\n",argv[0]);
 
