@@ -9,7 +9,7 @@
 #include "myalloc.h"
 
 #define word_size 8
-#define tag_size 8      //One words in a tag
+#define tag_size 8      //One word in a tag
 #define min_size 32			//must be large enough to store the list pointers plus header and footer
 #define page_size 4096
 
@@ -23,10 +23,10 @@ typedef struct tag {
 } tag;
 
 pthread_mutex_t malloc_lock;
-block_info *head;             //Holds the head of the explicit list
+block_info *head;             //Points to the head of the explicit list
 void* mem_start;              //Used to check if a free block is at the start of memory
 void* mem_end;                //Used to check if a free block is at the end of memory
-unsigned int init = 0;
+unsigned int init = 0;        //used to check if it is the first time the function has been called
 
 void split(tag *current_head, tag *current_foot, tag *next_head, tag *next_foot, block_info *current_info, block_info *next_info, int size);
 void removeLinks (block_info *link_ptrs);
@@ -39,11 +39,10 @@ void *myalloc(int size){
   tag *foot_tag;
 	block_info *head_info;
   size_t masked_size;
-  size_t isfree;
 
   //Make sure the size is large enough to fit the two pointers
-	if (size < tag_size) {
-		size = tag_size;
+	if (size < (word_size * 2)) {
+		size = (word_size * 2);
 	}
 
   //Make sure the size is a multiple of the word size for alignment purposes
@@ -51,6 +50,7 @@ void *myalloc(int size){
     size = size + (word_size - (size % word_size));
   }
 
+  //If this is the first time the function has been called mmap a heap and set up the first free block
   pthread_mutex_lock(&malloc_lock);
   if (!init) {
     init = 1;
@@ -72,7 +72,6 @@ void *myalloc(int size){
       head_tag = (char*)block + actual_size;
       head_tag->size = start_tag->size - actual_size;
       head_tag->size = head_tag->size | 1;              //Set head_tag to free
-      //head_tag->free = 1;
       head_info = (char*)head_tag + tag_size;
       head_info->next = NULL;
       head_info->prev = NULL;
@@ -85,6 +84,7 @@ void *myalloc(int size){
     return block_start;
   }
 
+  //Check the free list for a block big enough to to fulfill the request
 	block_info *curr = head;
 	while (curr) {
 		start_tag = (char*)curr - tag_size;
@@ -121,6 +121,7 @@ void myfree(void *ptr){
   current_head = (char*)ptr - tag_size;
   current_foot = (char*)ptr + current_head->size;
   current_info = ptr;
+
   //Check if the current block is at the start or end of memory
   if (current_head == mem_start) {
     next_tag = (char*)current_foot + tag_size;
@@ -145,7 +146,7 @@ void myfree(void *ptr){
       current_foot->size = total_size;
       current_info = prev_info;
     }
-  } else {
+  } else {    //Can check on either side
     next_tag = (char*)current_foot + tag_size;
     next_info = (char*)next_tag + tag_size;
     prev_tag = (char*)current_head - tag_size;
@@ -182,6 +183,7 @@ void myfree(void *ptr){
   pthread_mutex_unlock(&malloc_lock);
 }
 
+//Used to split the current block and set up a header and footer for the next block
 void split(tag *current_head, tag *current_foot, tag *next_head, tag *next_foot, block_info *current_info, block_info *next_info, int size) {
   size_t masked_size = current_head->size & ~1;
   next_head = (char*)current_info + (size + tag_size);
@@ -202,12 +204,13 @@ void split(tag *current_head, tag *current_foot, tag *next_head, tag *next_foot,
   if (current_info->prev) {
     next_info->prev = current_info->prev;
     current_info->prev->next = next_info;
-  } else {                           //Nothing previous means it is the head
+  } else {                                      //Nothing previous means it is the head
     next_info->prev = NULL;
     head = next_info;
   }
 }
 
+//Removes a block from the free list by modifying the next and previous block's pointers
 void removeLinks (block_info *link_ptrs) {
   if (link_ptrs->next && link_ptrs->prev) {
     link_ptrs->next->prev = link_ptrs->prev;
