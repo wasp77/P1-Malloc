@@ -9,8 +9,8 @@
 #include "myalloc.h"
 
 #define word_size 8
-#define tag_size 16     //Two words in a tag
-#define min_size 48			//must be large enough to store the list pointers plus header and footer
+#define tag_size 8      //One words in a tag
+#define min_size 32			//must be large enough to store the list pointers plus header and footer
 #define page_size 4096
 
 typedef struct block_info {
@@ -20,7 +20,6 @@ typedef struct block_info {
 
 typedef struct tag {
 	size_t size;
-	unsigned int free;
 } tag;
 
 pthread_mutex_t malloc_lock;
@@ -68,7 +67,6 @@ void *myalloc(int size){
     start_tag = block;
     void* block_start = (char*)block + tag_size;
     start_tag->size = (page_size * 4000) - (tag_size * 2);
-    //start_tag->free = 0;
 
     if (start_tag->size - actual_size >= min_size) {
       head_tag = (char*)block + actual_size;
@@ -82,7 +80,6 @@ void *myalloc(int size){
       start_tag->size = size;
       start_foot = (char*)head_tag - tag_size;
       start_foot->size = size;
-      //start_foot->free = 0;
     }
     pthread_mutex_unlock(&malloc_lock);
     return block_start;
@@ -177,9 +174,7 @@ void myfree(void *ptr){
     }
   }
   current_head->size = current_head->size | 1;
-  //current_head->free = 1;
   current_foot->size = current_foot->size | 1;
-  //current_foot->free = 1;
   current_info->next = head;
   current_info->prev = NULL;
   head->prev = current_info;
@@ -192,18 +187,11 @@ void split(tag *current_head, tag *current_foot, tag *next_head, tag *next_foot,
   next_head = (char*)current_info + (size + tag_size);
   next_head->size = masked_size - (size + tag_size * 2);
   next_head->size = next_head->size | 1;
-  //next_head->free = 1;
   next_foot = current_foot;
   next_foot->size = next_head->size;
-  //next_foot->size = next_foot->size | 1;
-  //next_foot->free = 1;
   current_head->size = size;
-  //current_head->size = current_head->size ^ 1;
-  //current_head->free = 0;
   current_foot = (char*)next_head - tag_size;
   current_foot->size = size;
-  //current_foot->size = current_foot->size ^ 1;
-  //current_foot->free = 0;
   next_info = (char*)next_head + tag_size;
   if (current_info->next) {
     next_info->next = current_info->next;
