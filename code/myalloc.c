@@ -54,7 +54,7 @@ void *myalloc(int size){
   if (!init) {
     init = 1;
     size_t actual_size = (tag_size * 2) + size;
-    void* block = mmap(NULL, page_size * 5000, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    void* block = mmap(NULL, page_size * 4000, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
     if (block == (void *) -1) {
       pthread_mutex_unlock(&malloc_lock);
       printf("%s\n", strerror(errno));
@@ -62,10 +62,10 @@ void *myalloc(int size){
     }
 
     mem_start = block;
-    mem_end = (char*)block + page_size * 5000;
+    mem_end = (char*)block + page_size * 4000;
     start_tag = block;
     void* block_start = (char*)block + tag_size;
-    start_tag->size = (page_size * 5000) - (tag_size * 2);
+    start_tag->size = (page_size * 4000) - (tag_size * 2);
     start_tag->free = 0;
 
     if (start_tag->size - actual_size >= min_size) {
@@ -129,7 +129,7 @@ void myfree(void *ptr){
       current_head->size = total_size;
       current_foot = (char*)next_info + next_tag->size;
       current_foot->size = total_size;
-  }
+    }
   } else if (((char*)current_foot + tag_size) == mem_end) {
     prev_tag = (char*)current_head - tag_size;
     prev_info = (char*)prev_tag - prev_tag->size;
@@ -215,5 +215,5 @@ void removeLinks (block_info *link_ptrs) {
     head = link_ptrs->next;
   } else if (!link_ptrs->next && link_ptrs->prev) {
     link_ptrs->prev->next = NULL;
-  } 
+  }
 }
