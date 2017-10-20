@@ -37,6 +37,22 @@ int *alloc_and_set(int value){
 }
 
 int main(int argc, char* argv[]){
+  // int i = 4000;
+  // int *q = &i;
+  // int j;
+  // int l;
+  // printf("%p\n", q);
+  // i = i | 1;
+  // i = i ^ 1;
+  // rintf("%p\n", q);
+  // if(!(i & 1)) {
+  //   printf("here\n");
+  // }
+  //
+  // printf("%d\n", j);
+  // l = i & ~1;
+  // printf("%d\n", l);
+  // return 0;
 	printf("%s starting\n",argv[0]);
 
 	// allocate

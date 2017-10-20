@@ -39,6 +39,8 @@ void *myalloc(int size){
 	tag *head_tag;
   tag *foot_tag;
 	block_info *head_info;
+  size_t masked_size;
+  size_t isfree;
 
   //Make sure the size is large enough to fit the two pointers
 	if (size < tag_size) {
@@ -66,12 +68,13 @@ void *myalloc(int size){
     start_tag = block;
     void* block_start = (char*)block + tag_size;
     start_tag->size = (page_size * 4000) - (tag_size * 2);
-    start_tag->free = 0;
+    //start_tag->free = 0;
 
     if (start_tag->size - actual_size >= min_size) {
       head_tag = (char*)block + actual_size;
       head_tag->size = start_tag->size - actual_size;
-      head_tag->free = 1;
+      head_tag->size = head_tag->size | 1;              //Set head_tag to free
+      //head_tag->free = 1;
       head_info = (char*)head_tag + tag_size;
       head_info->next = NULL;
       head_info->prev = NULL;
@@ -79,7 +82,7 @@ void *myalloc(int size){
       start_tag->size = size;
       start_foot = (char*)head_tag - tag_size;
       start_foot->size = size;
-      start_foot->free = 0;
+      //start_foot->free = 0;
     }
     pthread_mutex_unlock(&malloc_lock);
     return block_start;
@@ -88,9 +91,10 @@ void *myalloc(int size){
 	block_info *curr = head;
 	while (curr) {
 		start_tag = (char*)curr - tag_size;
-    start_foot = (char*)curr + start_tag->size;
-		if (start_tag->size >= size) {
-			if ((start_tag->size - size) >= min_size) {
+    masked_size = start_tag->size & ~1;               //Mask out last bit
+    start_foot = (char*)curr + masked_size;
+		if (masked_size >= size) {
+			if ((masked_size - size) >= min_size) {
         split(start_tag, start_foot, head_tag, foot_tag, curr, head_info, size);
 			} else {
         removeLinks(curr);
@@ -113,6 +117,7 @@ void myfree(void *ptr){
   tag *next_tag;
   tag *prev_tag;
   size_t total_size;
+  size_t masked_size;
 
   pthread_mutex_lock(&malloc_lock);
   //Get the three structs for the current block
@@ -122,19 +127,21 @@ void myfree(void *ptr){
   //Check if the current block is at the start or end of memory
   if (current_head == mem_start) {
     next_tag = (char*)current_foot + tag_size;
+    masked_size = next_tag->size & ~1;
     next_info = (char*)next_tag + tag_size;
-    if (next_tag->free) {
-      total_size = current_head->size + next_tag->size + (tag_size * 2);
+    if (next_tag->size & 1) {
+      total_size = current_head->size + masked_size + (tag_size * 2);
       removeLinks(next_info);
       current_head->size = total_size;
-      current_foot = (char*)next_info + next_tag->size;
+      current_foot = (char*)next_info + masked_size;
       current_foot->size = total_size;
     }
   } else if (((char*)current_foot + tag_size) == mem_end) {
     prev_tag = (char*)current_head - tag_size;
-    prev_info = (char*)prev_tag - prev_tag->size;
-    if (prev_tag->free) {
-      total_size = current_head->size + prev_tag->size + (tag_size * 2);
+    masked_size = prev_tag->size & ~1;
+    prev_info = (char*)prev_tag - masked_size;
+    if (prev_tag->size & 1) {
+      total_size = current_head->size + masked_size + (tag_size * 2);
       removeLinks(prev_info);
       current_head = (char*)prev_info - tag_size;
       current_head->size = total_size;
@@ -145,32 +152,34 @@ void myfree(void *ptr){
     next_tag = (char*)current_foot + tag_size;
     next_info = (char*)next_tag + tag_size;
     prev_tag = (char*)current_head - tag_size;
-    prev_info = (char*)prev_tag - prev_tag->size;
-    if (prev_tag->free && next_tag->free) {
-      total_size = current_head->size + prev_tag->size + next_tag->size + (tag_size * 4);
+    prev_info = (char*)prev_tag - (prev_tag->size & ~1);
+    if (prev_tag->size & 1 && next_tag->size & 1) {
+      total_size = current_head->size + (prev_tag->size & ~1) + (next_tag->size & ~1) + (tag_size * 4);
       removeLinks(prev_info);
       removeLinks(next_info);
       current_head = (char*)prev_info - tag_size;
       current_head->size = total_size;
       current_foot->size = total_size;
       current_info = (char*)prev_info;
-    } else if (prev_tag->free && !next_tag->free) {
-      total_size = current_head->size + prev_tag->size + (tag_size * 2);
+    } else if (prev_tag->size & 1 && !(next_tag->size & 1)) {
+      total_size = current_head->size + (prev_tag->size & ~1) + (tag_size * 2);
       removeLinks(prev_info);
       current_head = (char*)prev_info - tag_size;
       current_head->size = total_size;
       current_foot->size = total_size;
       current_info = (char*)prev_info;
-    } else if (!prev_tag->free && next_tag->free) {
-      total_size = current_head->size + next_tag->size + (tag_size * 2);
+    } else if (!(prev_tag->size & 1) && next_tag->size & 1) {
+      total_size = current_head->size + (next_tag->size & ~1) + (tag_size * 2);
       removeLinks(next_info);
       current_head->size = total_size;
-      current_foot = (char*)next_info + next_tag->size;
+      current_foot = (char*)next_info + (next_tag->size & ~1);
       current_foot->size = total_size;
     }
   }
-  current_head->free = 1;
-  current_foot->free = 1;
+  current_head->size = current_head->size | 1;
+  //current_head->free = 1;
+  current_foot->size = current_foot->size | 1;
+  //current_foot->free = 1;
   current_info->next = head;
   current_info->prev = NULL;
   head->prev = current_info;
@@ -179,17 +188,22 @@ void myfree(void *ptr){
 }
 
 void split(tag *current_head, tag *current_foot, tag *next_head, tag *next_foot, block_info *current_info, block_info *next_info, int size) {
+  size_t masked_size = current_head->size & ~1;
   next_head = (char*)current_info + (size + tag_size);
-  next_head->size = current_head->size - (size + tag_size * 2);
-  next_head->free = 1;
+  next_head->size = masked_size - (size + tag_size * 2);
+  next_head->size = next_head->size | 1;
+  //next_head->free = 1;
   next_foot = current_foot;
   next_foot->size = next_head->size;
-  next_foot->free = 1;
+  //next_foot->size = next_foot->size | 1;
+  //next_foot->free = 1;
   current_head->size = size;
-  current_head->free = 0;
+  //current_head->size = current_head->size ^ 1;
+  //current_head->free = 0;
   current_foot = (char*)next_head - tag_size;
   current_foot->size = size;
-  current_foot->free = 0;
+  //current_foot->size = current_foot->size ^ 1;
+  //current_foot->free = 0;
   next_info = (char*)next_head + tag_size;
   if (current_info->next) {
     next_info->next = current_info->next;
