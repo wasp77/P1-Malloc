@@ -215,7 +215,5 @@ void removeLinks (block_info *link_ptrs) {
     head = link_ptrs->next;
   } else if (!link_ptrs->next && link_ptrs->prev) {
     link_ptrs->prev->next = NULL;
-  } else {
-    head = NULL;
-  }
+  } 
 }
